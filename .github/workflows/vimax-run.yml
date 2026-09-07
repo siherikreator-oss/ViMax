@@ -1,0 +1,55 @@
+name: ViMax Video Generator
+
+on:
+  workflow_dispatch: # Bisa dijalankan manual lewat tombol
+    inputs:
+      ide:
+        description: 'Ide Video'
+        required: true
+        default: 'Tung Tung Sahur bekerja kuli bangunan, sedih & lelah'
+      durasi:
+        description: 'Batas waktu (menit)'
+        required: false
+        default: '360'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.durasi || 360 }}
+
+    steps:
+      - name: Ambil Kode Repo
+        uses: actions/checkout@v4
+
+      - name: Pasang Python & UV
+        run: |
+          sudo apt update
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Pasang Semua Ketergantungan
+        run: uv sync
+
+      - name: Siapkan Konfigurasi
+        env:
+          LLM_KEY: ${{ secrets.VIMAX_LLM_API_KEY }}
+          IMG_KEY: ${{ secrets.VIMAX_IMAGE_API_KEY }}
+          VID_KEY: ${{ secrets.VIMAX_VIDEO_API_KEY }}
+        run: |
+          cp configs/agent.example.yaml configs/agent.local.yaml
+          # Isi kunci API otomatis
+          sed -i "s/api_key:.*/api_key: ${{ secrets.VIMAX_LLM_API_KEY }}/g" configs/agent.local.yaml
+          sed -i "s/base_url:.*/base_url: 'https://openrouter.ai/api/v1'/g" configs/agent.local.yaml
+
+      - name: Masukkan Ide & Jalankan ViMax
+        run: |
+          echo 'idea = "${{ inputs.ide }}"' >> main_idea2video.py
+          uv run python main_idea2video.py
+
+      - name: Simpan Hasil Video (Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hasil-Video-ViMax
+          path: .working_dir/*.mp4
+          retention-days: 7
+          
